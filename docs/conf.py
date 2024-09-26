@@ -23,7 +23,7 @@ extensions = [
     "sphinx.ext.todo",
 ]
 
-autodoc_mock_imports = ["ulab", "displayio", "micropython", "terminalio", "fontio"]
+autodoc_mock_imports = ["ulab", "displayio", "micropython", "terminalio", "fontio", "vectorio"]
 
 autodoc_preserve_defaults = True
 

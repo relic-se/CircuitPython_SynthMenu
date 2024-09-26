@@ -6,6 +6,7 @@
 import displayio
 from micropython import const
 import terminalio
+import vectorio
 from adafruit_display_text import label
 
 import synthmenu
@@ -21,7 +22,6 @@ BORDER_WIDTH = const(1)
 PADDING = const(2)
 
 SCROLLBAR_WIDTH = const(2)
-SCROLLBAR_HEIGHT = const(12)
 
 CHAR_WIDTH = const(6)
 CHAR_HEIGHT = const(8)
@@ -67,11 +67,11 @@ class Menu(synthmenu.Menu):
 
         title_background_color = displayio.Palette(1)
         title_background_color[0] = self.title_background_color
-        self._title_background = displayio.TileGrid(
-            displayio.Bitmap(self._width, LINE_SIZE, 1),
+        self._title_item.append(vectorio.Rectangle(
             pixel_shader=title_background_color,
-        )
-        self._title_item.append(self._title_background)
+            width=self._width,
+            height=LINE_SIZE,
+        ))
 
         title_label = label.Label(title_font, text="", color=self.title_label_color)
         title_label.anchor_point = (0.5, 0.5)
@@ -80,25 +80,24 @@ class Menu(synthmenu.Menu):
 
         self._buffer.append(self._title_item)
 
-        border_bitmap = displayio.Bitmap(self._width - SCROLLBAR_WIDTH, LINE_SIZE, 1)
-        item_background_bitmap = displayio.Bitmap(self._width - BORDER_WIDTH * 2 - SCROLLBAR_WIDTH, LINE_SIZE - BORDER_WIDTH * 2, 1)
-
         self._draw_items = displayio.Group(y=LINE_SIZE)
         for i in range(self.lines):
             item = displayio.Group(x=0, y=LINE_SIZE*i)
 
             border_color = displayio.Palette(1)
             border_color[0] = self.item_border_color
-            item.append(displayio.TileGrid(
-                border_bitmap,
+            item.append(vectorio.Rectangle(
                 pixel_shader=border_color,
+                width=self._width - SCROLLBAR_WIDTH,
+                height=LINE_SIZE,
             ))
 
             background_color = displayio.Palette(1)
             background_color[0] = self.item_background_color
-            item.append(displayio.TileGrid(
-                item_background_bitmap,
+            item.append(vectorio.Rectangle(
                 pixel_shader=background_color,
+                width=self._width - BORDER_WIDTH * 2 - SCROLLBAR_WIDTH,
+                height=LINE_SIZE - BORDER_WIDTH * 2,
                 x=BORDER_WIDTH,
                 y=BORDER_WIDTH,
             ))
@@ -127,18 +126,16 @@ class Menu(synthmenu.Menu):
 
         scrollbar_color = displayio.Palette(1)
         scrollbar_color[0] = 0xFFFFFF
-        self._scrollbar_item = displayio.TileGrid(
-            displayio.Bitmap(1, 1, 1),
+        self._scrollbar_item = vectorio.Rectangle(
             pixel_shader=scrollbar_color,
             width=SCROLLBAR_WIDTH,
-            height=SCROLLBAR_HEIGHT,
+            height=1,
             x=self._width-SCROLLBAR_WIDTH,
             y=LINE_SIZE,
         )
         self._buffer.append(self._scrollbar_item)
 
-        self._indicator_item = displayio.TileGrid(
-            displayio.Bitmap(1, 1, 1),
+        self._indicator_item = vectorio.Rectangle(
             pixel_shader=scrollbar_color,
             width=INDICATOR_WIDTH,
             height=INDICATOR_HEIGHT,
@@ -189,7 +186,8 @@ class Menu(synthmenu.Menu):
                     self._clear_item(i)
                 j += 1
             
-            self._scrollbar_item.y = int(LINE_SIZE + (self._height - LINE_SIZE - SCROLLBAR_HEIGHT) * item.index / max(item.length - 1, 1))
+            self._scrollbar_item.height = int((self._height - LINE_SIZE) / item.length)
+            self._scrollbar_item.y = int(LINE_SIZE + (self._height - LINE_SIZE - self._scrollbar_item.height) * item.index / max(item.length - 1, 1))
 
         else:
             self._value_item[0].text = str(item.label)
