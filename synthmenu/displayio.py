@@ -6,6 +6,7 @@
 import displayio
 from micropython import const
 import terminalio
+import ulab.numpy as np
 import vectorio
 from adafruit_display_text import label
 
@@ -143,6 +144,17 @@ class Menu(synthmenu.Menu):
         )
         self._indicator_item.hidden = True
         self._buffer.append(self._indicator_item)
+
+        chart_color = displayio.Palette(1)
+        chart_color[0] = 0xFFFFFF
+        self._chart_item = vectorio.Polygon(
+            pixel_shader=chart_color,
+            points=[(0, 0) for i in range(3)], # Empty shape
+            x=0,
+            y=LINE_SIZE + 1,
+        )
+        self._chart_item.hidden = True
+        self._buffer.append(self._chart_item)
         
         super().__init__(title, items, loop)
 
@@ -169,12 +181,14 @@ class Menu(synthmenu.Menu):
         self._title_item[1].text = item.title
 
         is_string = isinstance(item, synthmenu.String)
+        is_waveform = isinstance(item, synthmenu.WaveformList)
         show_value = not isinstance(item, synthmenu.Group) or is_string
 
         self._draw_items.hidden = show_value
-        self._value_item.hidden = not show_value
+        self._value_item.hidden = not show_value or is_waveform
         self._scrollbar_item.hidden = show_value
         self._indicator_item.hidden = not is_string
+        self._chart_item.hidden = not is_waveform
 
         if not show_value:
             j = item.index - self.lines // 2
@@ -189,6 +203,9 @@ class Menu(synthmenu.Menu):
             
             self._scrollbar_item.height = int((self._height - LINE_SIZE) / item.length)
             self._scrollbar_item.y = int(LINE_SIZE + (self._height - LINE_SIZE - self._scrollbar_item.height) * item.index / max(item.length - 1, 1))
+
+        elif is_waveform:
+            self._draw_chart(item.data)
 
         else:
             self._value_item[0].text = str(item.label)
@@ -208,3 +225,25 @@ class Menu(synthmenu.Menu):
 
     def _clear_item(self, index:int) -> None:
         self._draw_items[index % len(self._draw_items)].hidden = True
+
+    def _draw_chart(self, data:np.ndarray, resolution:float = 0.25) -> None:
+        if data.dtype != np.int16:
+            raise ValueError("Chart data must be of data type np.int16")
+        size = min(max(resolution * self._width, 1), self._width)
+        if len(data) != size:
+            data = np.interp(
+                np.arange(0.0, len(data), len(data) / size, dtype=np.float),
+                np.arange(0, len(data), 1, dtype=np.uint16),
+                data
+            )
+        else:
+            data = np.array(data, dtype=np.float)
+        height = self._height - LINE_SIZE - 1
+        x_scale = self._width / size
+        data = np.array((data / -32767 + 1) * height / 2, dtype=np.int16)
+        points = []
+        for i in range(len(data)):
+            points.append((int(i * x_scale), min(max(data[i], 0), height - 1)))
+        for i in range(len(data) - 1, -1, -1):
+            points.append((int(i * x_scale), min(max(data[i] + 1, 1), height)))
+        self._chart_item.points = points
