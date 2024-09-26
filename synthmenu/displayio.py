@@ -155,6 +155,7 @@ class Menu(synthmenu.Menu):
     @scrollbar_color.setter
     def scrollbar_color(self, value:int) -> None:
         self._scrollbar_item.pixel_shader[0] = value
+        self._indicator_item.pixel_shader[0] = value
 
     @property
     def lines(self) -> int:
