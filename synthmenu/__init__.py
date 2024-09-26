@@ -265,6 +265,11 @@ class Menu(Group):
             result = super().navigate(value)
         elif isinstance(self.selected, Group):
             result = self.selected.navigate(value)
+        elif len(self._stack) > 1 and isinstance(self._stack[-2], Group):
+            result = self._stack[-2].navigate(value)
+            if result:
+                self._stack.pop()
+                self._stack.append(self.selected.current_item)
         if result: self.draw(self.selected)
         return result
     
