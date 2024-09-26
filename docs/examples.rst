@@ -7,15 +7,6 @@ Ensure your device works with this simple test.
     :caption: examples/synthmenu_simpletest.py
     :linenos:
 
-Character LCD
--------------
-
-Demonstration of a basic menu with a 4-bit 16x2 character LCD (using the HD44780 controller).
-
-.. literalinclude:: ../examples/synthmenu_character_lcd.py
-    :caption: examples/synthmenu_character_lcd.py
-    :linenos:
-
 displayio
 ------------
 
