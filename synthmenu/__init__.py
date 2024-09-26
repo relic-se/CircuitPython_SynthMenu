@@ -324,6 +324,8 @@ class Number(Item):
         loop:bool = False,
         show_sign:bool = False,
         decimals:int = 1,
+        prepend:str = "",
+        append:str = "",
     ):
         super().__init__(title)
         self._step = step
@@ -335,6 +337,8 @@ class Number(Item):
         self._loop = loop
         self._show_sign = show_sign
         self.decimals = decimals
+        self._prepend = prepend
+        self._append = append
 
     @property
     def decimals(self) -> int:
@@ -380,9 +384,10 @@ class Number(Item):
     def label(self) -> str:
         value = self.value
         if type(value) is float:
-            return "{{:.{:d}f}}".format(self.decimals).format(value)
+            label = "{{:.{:d}f}}".format(self.decimals).format(value)
         else:
-            return ("{:+d}" if self._show_sign else "{:d}").format(value).replace("+0", "0")
+            label = ("{:+d}" if self._show_sign else "{:d}").format(value).replace("+0", "0")
+        return "".join((self._prepend, label, self._append))
     
     def increment(self) -> bool:
         value = self._value + self._step
@@ -489,6 +494,7 @@ class Time(Number):
             smoothing=smoothing,
             loop=False,
             decimals=decimals,
+            append="s",
         )
     
 class List(Number):
