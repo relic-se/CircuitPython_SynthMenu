@@ -177,6 +177,16 @@ class Group(Item):
         self._index = index
         return True
     
+    def increment(self) -> bool:
+        if isinstance(self.current_item, Group):
+            return False
+        return self.current_item.increment()
+    
+    def decrement(self) -> bool:
+        if isinstance(self.current_item, Group):
+            return False
+        return self.current_item.decrement()
+    
     def reset(self, full:bool = False) -> bool:
         if full:
             for item in self._items:
