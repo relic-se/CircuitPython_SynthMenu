@@ -48,7 +48,7 @@ menu = synthmenu.displayio.Menu(WIDTH, HEIGHT, "picoslidertoy Menu", (
                 np.linspace(-32767, 32767, num=WIDTH//2, dtype=np.int16),
                 np.linspace(32767, -32767, num=WIDTH//2, dtype=np.int16)
             ))),
-            ("Square", lambda: np.concatenate((np.full(WITDH//2, 32767, dtype=np.int16), np.full(WIDTH//2, -32767, dtype=np.int16)))),
+            ("Square", lambda: np.concatenate((np.full(WIDTH//2, 32767, dtype=np.int16), np.full(WIDTH//2, -32767, dtype=np.int16)))),
         )),
         synthmenu.AREnvelope(item_title),
         synthmenu.ADSREnvelope(item_title),
@@ -65,13 +65,15 @@ display.root_group = menu.group
 wheelX = touchslider.TouchWheelRotary((board.GP7, board.GP8, board.GP9))
 wheelY = touchslider.TouchWheelRotary((board.GP10, board.GP11, board.GP12))
 
-wheelX.on_decrement = lambda: menu.previous()
 wheelX.on_increment = lambda: menu.next()
-wheelX.on_left_press = lambda: menu.exit()
+wheelX.on_decrement = lambda: menu.previous()
 wheelX.on_right_press = lambda: menu.select()
+wheelX.on_left_press = lambda: menu.exit()
 
 wheelY.on_increment = lambda: menu.increment()
 wheelY.on_decrement = lambda: menu.decrement()
+wheelY.on_right_press = lambda: menu.increment()
+wheelY.on_left_press = lambda: menu.decrement()
 
 while True:
     wheelX.update()

@@ -46,7 +46,7 @@ menu = synthmenu.displayio.Menu(WIDTH, HEIGHT, "displayio Menu", (
                 np.linspace(-32767, 32767, num=WIDTH//2, dtype=np.int16),
                 np.linspace(32767, -32767, num=WIDTH//2, dtype=np.int16)
             ))),
-            ("Square", lambda: np.concatenate((np.full(WITDH//2, 32767, dtype=np.int16), np.full(WIDTH//2, -32767, dtype=np.int16)))),
+            ("Square", lambda: np.concatenate((np.full(WIDTH//2, 32767, dtype=np.int16), np.full(WIDTH//2, -32767, dtype=np.int16)))),
         )),
         synthmenu.AREnvelope(item_title),
         synthmenu.ADSREnvelope(item_title),
