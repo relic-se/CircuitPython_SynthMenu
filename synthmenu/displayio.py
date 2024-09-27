@@ -26,8 +26,7 @@ SCROLLBAR_WIDTH = const(2)
 
 CHAR_WIDTH = const(6)
 CHAR_HEIGHT = const(8)
-INDICATOR_WIDTH = const(5)
-INDICATOR_HEIGHT = const(2)
+INDICATOR_STROKE = const(2)
 INDICATOR_MARGIN = const(2)
 
 class Menu(synthmenu.Menu):
@@ -138,23 +137,34 @@ class Menu(synthmenu.Menu):
 
         self._indicator_item = vectorio.Rectangle(
             pixel_shader=scrollbar_color,
-            width=INDICATOR_WIDTH,
-            height=INDICATOR_HEIGHT,
+            width=CHAR_WIDTH - 1,
+            height=INDICATOR_STROKE,
             y=LINE_SIZE + (self._height - LINE_SIZE) // 2 + CHAR_HEIGHT // 2 + INDICATOR_MARGIN,
         )
         self._indicator_item.hidden = True
         self._buffer.append(self._indicator_item)
 
+        self._chart_group = displayio.Group(y=LINE_SIZE + 1)
+
         chart_color = displayio.Palette(1)
         chart_color[0] = 0xFFFFFF
-        self._chart_item = vectorio.Polygon(
+        self._chart_group.append(vectorio.Polygon(
             pixel_shader=chart_color,
             points=[(0, 0) for i in range(3)], # Empty shape
-            x=0,
-            y=LINE_SIZE + 1,
-        )
-        self._chart_item.hidden = True
-        self._buffer.append(self._chart_item)
+        ))
+
+        for i in range(2):
+            self._chart_group.append(vectorio.Rectangle(
+                pixel_shader=scrollbar_color,
+                width=INDICATOR_STROKE,
+                height=self._chart_height - INDICATOR_MARGIN * 2,
+                x=-1,
+                y=INDICATOR_MARGIN,
+            ))
+            self._chart_group[-1].hidden = True
+
+        self._chart_group.hidden = True
+        self._buffer.append(self._chart_group)
         
         super().__init__(title, items, loop)
 
@@ -167,7 +177,6 @@ class Menu(synthmenu.Menu):
     @scrollbar_color.setter
     def scrollbar_color(self, value:int) -> None:
         self._scrollbar_item.pixel_shader[0] = value
-        self._indicator_item.pixel_shader[0] = value
 
     @property
     def lines(self) -> int:
@@ -178,19 +187,30 @@ class Menu(synthmenu.Menu):
         return self._buffer
     
     def draw(self, item:synthmenu.Item) -> None:
-        self._title_item[1].text = item.title
 
         is_string = isinstance(item, synthmenu.String)
-        is_waveform = isinstance(item, synthmenu.WaveformList)
-        show_value = not isinstance(item, synthmenu.Group) or is_string
+        is_waveform = isinstance(item, synthmenu.WaveformList) or isinstance(item, synthmenu.Waveform)
+        is_waveform_group = isinstance(item, synthmenu.Waveform)
+        is_envelope = isinstance(item, synthmenu.AREnvelope) or isinstance(item, synthmenu.ADSREnvelope)
+        is_value_group = is_string or is_waveform_group or is_envelope
+        is_value = not isinstance(item, synthmenu.Group) or is_string or is_waveform_group or is_envelope
 
-        self._draw_items.hidden = show_value
-        self._value_item.hidden = not show_value or is_waveform
-        self._scrollbar_item.hidden = show_value
+        self._draw_items.hidden = is_value
+        self._value_item.hidden = not is_value or is_waveform or is_envelope
+        self._scrollbar_item.hidden = is_value
         self._indicator_item.hidden = not is_string
-        self._chart_item.hidden = not is_waveform
+        self._chart_group.hidden = not is_waveform and not is_envelope
+        self._chart_group[1].hidden = not is_waveform_group and not is_envelope
+        self._chart_group[2].hidden = not is_waveform_group
 
-        if not show_value:
+        if is_value_group:
+            self._title_item[1].text = "{:s}: {:s}".format(item.title, item.current_item.title)
+        elif is_waveform:
+            self._title_item[1].text = "{:s}: {:s}".format(item.title, item.label)
+        else:
+            self._title_item[1].text = item.title
+
+        if not is_value:
             j = item.index - self.lines // 2
             if not item.loop:
                 j = min(max(j, 0), max(item.length - self.lines, 0))
@@ -205,7 +225,41 @@ class Menu(synthmenu.Menu):
             self._scrollbar_item.y = int(LINE_SIZE + (self._height - LINE_SIZE - self._scrollbar_item.height) * item.index / max(item.length - 1, 1))
 
         elif is_waveform:
-            self._draw_chart(item.data)
+            self._draw_waveform(item.waveform.data if is_waveform_group else item.data)
+            if is_waveform_group:
+                self._chart_group[1].x = min(max(int(item.loop_start.value * self._width), 0), self._width - INDICATOR_STROKE)
+                self._chart_group[2].x = min(max(int(item.loop_end.value * self._width), 0), self._width - INDICATOR_STROKE)
+
+        elif is_envelope:
+            if isinstance(item, synthmenu.AREnvelope):
+                values = (
+                    (item.attack_time.relative_value, item.sustain_level.value),
+                    (item.release_time.relative_value, item.sustain_level.value),
+                )
+                if item.index == 0: # attack_time
+                    pos = item.attack_time.relative_value / 6
+                elif item.index == 1: # sustain_level
+                    pos = (1 - (item.attack_time.relative_value + item.release_time.relative_value) / 3) / 2 + item.attack_time.relative_value / 3
+                else: # release_time
+                    pos = 1 - item.release_time.relative_value / 6
+            else:
+                values = (
+                    (item.attack_time.relative_value, item.attack_level.value),
+                    (item.decay_time.relative_value, item.sustain_level.value),
+                    (item.release_time.relative_value, item.sustain_level.value),
+                )
+                if item.index == 0: # attack_time
+                    pos = item.attack_time.relative_value / 8
+                elif item.index == 1: # attack_level
+                    pos = item.attack_time.relative_value / 4
+                elif item.index == 2: # decay_time
+                    pos = item.attack_time.relative_value / 4 + item.decay_time.relative_value / 8
+                elif item.index == 3: # sustain_level
+                    pos = (1 - (item.attack_time.relative_value + item.decay_time.relative_value + item.release_time.relative_value) / 4) / 2 + (item.attack_time.relative_value + item.decay_time.relative_value) / 4
+                else: # release_time
+                    pos = 1 - item.release_time.relative_value / 8
+            self._draw_envelope(values)
+            self._chart_group[1].x = round(pos * (self._width - INDICATOR_STROKE))
 
         else:
             self._value_item[0].text = str(item.label)
@@ -226,7 +280,11 @@ class Menu(synthmenu.Menu):
     def _clear_item(self, index:int) -> None:
         self._draw_items[index % len(self._draw_items)].hidden = True
 
-    def _draw_chart(self, data:np.ndarray, resolution:float = 0.25) -> None:
+    @property
+    def _chart_height(self) -> int:
+        return self._height - LINE_SIZE - 1
+
+    def _draw_waveform(self, data:np.ndarray, resolution:float = 0.25) -> None:
         if data.dtype != np.int16:
             raise ValueError("Chart data must be of data type np.int16")
         size = min(max(resolution * self._width, 1), self._width)
@@ -238,12 +296,36 @@ class Menu(synthmenu.Menu):
             )
         else:
             data = np.array(data, dtype=np.float)
-        height = self._height - LINE_SIZE - 1
+        height = self._chart_height
         x_scale = self._width / size
         data = np.array((data / -32767 + 1) * height / 2, dtype=np.int16)
         points = []
         for i in range(len(data)):
-            points.append((int(i * x_scale), min(max(data[i], 0), height - 1)))
+            points.append((int(i * x_scale), min(max(data[i], 0), height - INDICATOR_STROKE)))
         for i in range(len(data) - 1, -1, -1):
             points.append((int(i * x_scale), min(max(data[i] + 1, 1), height)))
-        self._chart_item.points = points
+        self._chart_group[0].points = points
+
+    def _draw_envelope(self, values:tuple[tuple[float, float]], fill:bool = False) -> None:
+        if len(values) < 2:
+            raise ValueError("Envelope must have at least 2 positions")
+        points = [(0, self._chart_height - INDICATOR_STROKE)]
+        for i, value in enumerate(values):
+            if i < len(values) - 1:
+                points.append((
+                    round(points[-1][0] + value[0] / (len(values) + 1) * (self._width - 1)),
+                    round((1 - value[1]) * (self._chart_height - INDICATOR_STROKE))
+                ))
+            else:
+                points.append((
+                    round((1 - value[0] / (len(values) + 1)) * (self._width - 1)),
+                    round((1 - value[1]) * (self._chart_height - INDICATOR_STROKE))
+                ))
+        points.append((self._width - 1, self._chart_height - INDICATOR_STROKE))
+        if fill:
+            points.append((self._width - 1, self._chart_height))
+            points.append((0, self._chart_height))
+        else:
+            for i in range(len(points) - 1, -1, -1):
+                points.append((points[i][0], points[i][1] + INDICATOR_STROKE))
+        self._chart_group[0].points = points

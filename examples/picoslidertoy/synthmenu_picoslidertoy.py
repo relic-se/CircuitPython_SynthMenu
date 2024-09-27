@@ -31,7 +31,6 @@ def item_title(item:synthmenu.Item) -> str:
 menu = synthmenu.displayio.Menu(WIDTH, HEIGHT, "picoslidertoy Menu", (
     synthmenu.Action(item_title, lambda: print("Hello World")),
     synthmenu.Group("Simple Items", (
-        synthmenu.Action("Return", lambda: menu.exit()),
         synthmenu.Number(item_title),
         synthmenu.Bool(item_title),
         synthmenu.Time(item_title),
@@ -39,7 +38,6 @@ menu = synthmenu.displayio.Menu(WIDTH, HEIGHT, "picoslidertoy Menu", (
         synthmenu.Char(item_title),
     )),
     synthmenu.Group("Complex Items", (
-        synthmenu.Action("Return", lambda: menu.exit()),
         synthmenu.String(item_title, length=8),
         synthmenu.Waveform(item_title, (
             ("Sine", lambda: np.array(np.sin(np.linspace(0, 2*np.pi, WIDTH, endpoint=False)) * 32767, dtype=np.int16)),
@@ -63,7 +61,7 @@ menu = synthmenu.displayio.Menu(WIDTH, HEIGHT, "picoslidertoy Menu", (
 display.root_group = menu.group
 
 wheelX = touchslider.TouchWheelRotary((board.GP7, board.GP8, board.GP9))
-wheelY = touchslider.TouchWheelRotary((board.GP10, board.GP11, board.GP12))
+wheelY = touchslider.TouchWheelRotary((board.GP10, board.GP11, board.GP12), step_size=0.15)
 
 wheelX.on_increment = lambda: menu.next()
 wheelX.on_decrement = lambda: menu.previous()
