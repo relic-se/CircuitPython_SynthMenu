@@ -2,6 +2,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024 Cooper Dalrymple
 #
 # SPDX-License-Identifier: Unlicense
+"""
+Example for `picoslidertoy <https://github.com/todbot/picoslidertoy>`_ by @todbot.
+"""
 
 import board
 import busio
