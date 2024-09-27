@@ -127,12 +127,15 @@ class Group(Item):
         return tuple([i.value for i in self._items])
     
     @value.setter
-    def value(self, value:tuple) -> None:
-        for i in range(len(value)):
-            if i >= len(self._items):
-                break
-            self._items[i].value = value[i]
-        self._do_update()
+    def value(self, value:any) -> None:
+        if isinstance(value, (tuple, list)):
+            for i in range(len(value)):
+                if i >= len(self._items):
+                    break
+                self._items[i].value = value[i]
+            self._do_update()
+        elif not isinstance(self.current_item, Group):
+            self.current_item.value = value
     
     @property
     def data(self) -> dict:
@@ -281,6 +284,21 @@ class Menu(Group):
         self.draw(self.selected)
         return True
     
+    @property
+    def value(self) -> tuple:
+        return super().value
+    
+    @value.setter
+    def value(self, value:any) -> None:
+        if isinstance(value, (tuple, list)):
+            super().value = value
+        else:
+            item = self.selected.current_item if isinstance(self.selected, Group) else self.selected
+            prev_value = item.value
+            item.value = value
+            if item.value != prev_value:
+                self.draw(self.selected)
+    
     def increment(self) -> bool:
         result = False
         if self.selected is not self:
@@ -373,7 +391,12 @@ class Number(Item):
     
     @value.setter
     def value(self, value:float|int) -> None:
-        value = min(max(value, self._get_minimum()), self._get_maximum())
+        _min = self._get_minimum()
+        _max = self._get_maximum()
+        if type(value) is float and type(_min) is int and type(_max) is int:
+            value = round(min(max(value, 0.0), 1.0) * (_max - _min)) + _min
+        else:
+            value = min(max(value, _min), _max)
         if self._value != value:
             self._value = value
             self._do_update()
@@ -447,7 +470,9 @@ class Bool(Number):
         return bool(self._value)
     
     @value.setter
-    def value(self, value:bool) -> None:
+    def value(self, value:bool|float) -> None:
+        if type(value) is float:
+            value = value > 0.5
         value = int(value)
         if self._value != value:
             self._value = value
@@ -543,8 +568,10 @@ class Char(Number):
         return _CHARACTERS[self._value]
 
     @value.setter
-    def value(self, value:str|int):
-        if type(value) is str:
+    def value(self, value:str|int|float):
+        if type(value) is float:
+            value = round(value * (len(_CHARACTERS) - 1))
+        elif type(value) is str:
             if not len(value):
                 return
             value = _CHARACTERS.find(value[0])
@@ -572,9 +599,10 @@ class String(Group):
     
     @value.setter
     def value(self, value:str) -> None:
-        for i in range(min(len(value), self._length)):
-            self._items[i].value = value[i]
-        self._do_update()
+        if type(value) is str:
+            for i in range(min(len(value), self._length)):
+                self._items[i].value = value[i]
+            self._do_update()
     
     @property
     def data(self) -> str:

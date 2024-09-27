@@ -76,6 +76,11 @@ wheelY.on_decrement = lambda: menu.decrement()
 wheelY.on_right_press = lambda: menu.increment()
 wheelY.on_left_press = lambda: menu.decrement()
 
+faderC = touchslider.TouchSlider((board.GP3, board.GP2, board.GP26))
+
 while True:
     wheelX.update()
     wheelY.update()
+    
+    if (pos := faderC.pos) is not None:
+        menu.value = 1 - pos
