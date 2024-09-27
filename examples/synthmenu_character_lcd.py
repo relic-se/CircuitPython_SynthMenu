@@ -19,12 +19,15 @@ lcd_d5 = digitalio.DigitalInOut(board.GP4)
 lcd_d4 = digitalio.DigitalInOut(board.GP5)
 lcd_backlight = digitalio.DigitalInOut(board.GP6)
 
-lcd_columns = 16
-lcd_rows = 2
+COLUMNS = 16
+ROWS = 2
 
-lcd = character_lcd.Character_LCD_Mono(lcd_rs, lcd_en, lcd_d4, lcd_d5, lcd_d6, lcd_d7, lcd_columns, lcd_rows, lcd_backlight)
+lcd = character_lcd.Character_LCD_Mono(lcd_rs, lcd_en, lcd_d4, lcd_d5, lcd_d6, lcd_d7, COLUMNS, ROWS, lcd_backlight)
 
-menu = synthmenu.character_lcd.Menu(lcd, lcd_columns, lcd_rows, "CharLCD Menu", (
+def item_title(item:synthmenu.Item) -> str:
+    return type(item).__name__
+
+menu = synthmenu.character_lcd.Menu(lcd, COLUMNS, ROWS, "CharLCD Menu", (
     synthmenu.Action(item_title, lambda: print("Hello World")),
     synthmenu.Group("Simple Items", (
         synthmenu.Action("Return", lambda: menu.exit()),
@@ -36,15 +39,15 @@ menu = synthmenu.character_lcd.Menu(lcd, lcd_columns, lcd_rows, "CharLCD Menu", 
     )),
     synthmenu.Group("Complex Items", (
         synthmenu.Action("Return", lambda: menu.exit()),
-        synthmenu.String(item_title, length=8),
+        synthmenu.String(item_title, length=COLUMNS),
         synthmenu.Waveform(item_title, (
-            ("Sine", lambda: np.array(np.sin(np.linspace(0, 2*np.pi, WIDTH, endpoint=False)) * 32767, dtype=np.int16)),
-            ("Saw", lambda: np.linspace(32767, -32767, num=WIDTH, dtype=np.int16)),
+            ("Sine", lambda: np.array(np.sin(np.linspace(0, 2*np.pi, COLUMNS, endpoint=False)) * 32767, dtype=np.int16)),
+            ("Saw", lambda: np.linspace(32767, -32767, num=COLUMNS, dtype=np.int16)),
             ("Triangle", lambda: np.concatenate((
-                np.linspace(-32767, 32767, num=WIDTH//2, dtype=np.int16),
-                np.linspace(32767, -32767, num=WIDTH//2, dtype=np.int16)
+                np.linspace(-32767, 32767, num=COLUMNS//2, dtype=np.int16),
+                np.linspace(32767, -32767, num=COLUMNS//2, dtype=np.int16)
             ))),
-            ("Square", lambda: np.concatenate((np.full(WITDH//2, 32767, dtype=np.int16), np.full(WIDTH//2, -32767, dtype=np.int16)))),
+            ("Square", lambda: np.concatenate((np.full(COLUMNS//2, 32767, dtype=np.int16), np.full(COLUMNS//2, -32767, dtype=np.int16)))),
         )),
         synthmenu.AREnvelope(item_title),
         synthmenu.ADSREnvelope(item_title),
