@@ -203,6 +203,7 @@ class Menu(Group):
     def __init__(self, title:str|Callable[[Item], str], items:tuple[Item] = None, loop:bool = False):
         super().__init__(title, items, loop)
         self._stack = [self]
+        self.draw(self.selected)
 
     @property
     def selected(self) -> Item:
