@@ -300,17 +300,17 @@ class Menu(Group):
                 self.draw(self.selected)
     
     def increment(self) -> bool:
-        result = False
         if self.selected is not self:
             result = self.selected.increment()
-        if result: self.draw(self.selected)
+        else:
+            result = super().increment()
         return result
     
     def decrement(self) -> bool:
-        result = False
         if self.selected is not self:
             result = self.selected.decrement()
-        if result: self.draw(self.selected)
+        else:
+            result = super().decrement()
         return result
     
     def reset(self, full:bool = False) -> bool:
