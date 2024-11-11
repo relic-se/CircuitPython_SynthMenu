@@ -31,8 +31,13 @@ class Menu(synthmenu.Menu):
         self._lcd.blink = False
         super().__init__(title, items, loop)
 
-    def draw(self, item:synthmenu.Item) -> None:
+    def _has_cursor(self, item: synthmenu.Item) -> bool:
+        return isinstance(item, synthmenu.String) or isinstance(item, synthmenu.Sequence)
+
+    def draw(self) -> None:
         self._lcd.cursor_position(0, 0)
+        
+        item = self.selected
 
         title = item.title
         if isinstance(item, synthmenu.Group):
@@ -42,14 +47,14 @@ class Menu(synthmenu.Menu):
             title = "{{:<{:d}}}:{:s}{{:<{:d}}}".format(title_len, " " * gap_len, item_len).format(item.title[:title_len], item.current_item.title[:item_len])
 
         value = item.label
-        if isinstance(item, synthmenu.Group) and not isinstance(item, synthmenu.String):
-            value = "Enter" if isinstance(item.current_item, synthmenu.Group) and not isinstance(item.current_item, synthmenu.String) else item.current_item.label
+        if isinstance(item, synthmenu.Group) and not self._has_cursor(item):
+            value = "Enter" if isinstance(item.current_item, synthmenu.Group) and not self._has_cursor(item.current_item) else item.current_item.label
 
         lines = [title, value]
         for i in range(len(lines)):
             lines[i] = "{{:<{:d}}}".format(self._columns).format(lines[i][:self._columns])
         self._lcd.message = "\n".join(lines)
 
-        self._lcd.cursor = isinstance(item, synthmenu.String)
-        if isinstance(item, synthmenu.String):
+        self._lcd.cursor = self._has_cursor(item)
+        if self._has_cursor(item):
             self._lcd.cursor_position(item.index % self._columns, 1)

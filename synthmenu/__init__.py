@@ -49,8 +49,9 @@ _CHARACTERS = " abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!-
 
 class Item:
 
-    def __init__(self, title:str|Callable[[object], str] = ""):
+    def __init__(self, title:str|Callable[[object], str] = "", on_update: Callable[[any, object], None] = None):
         self._title = title
+        self.on_update = on_update
 
     @property
     def title(self) -> str:
@@ -72,9 +73,13 @@ class Item:
     def data(self) -> any:
         return self.value
     
+    @data.setter
+    def data(self, value:any) -> None:
+        pass
+    
     on_update: Callable[[any, object], None] = None
 
-    def _do_update(self):
+    def do_update(self):
         if callable(self.on_update): self.on_update(self.value, self)
 
     def select(self) -> bool|None:
@@ -116,10 +121,10 @@ class Group(Item):
     def current_item(self) -> Item:
         return self._items[self._index]
     
-    def find(self, title:str) -> Item:
-        for i in self._items:
-            if i.title == title:
-                return i
+    def find(self, title:str) -> tuple[int, Item]:
+        for i, item in enumerate(self._items):
+            if item.title == title:
+                return i, item
         return None
     
     @property
@@ -133,23 +138,32 @@ class Group(Item):
                 if i >= len(self._items):
                     break
                 self._items[i].value = value[i]
-            self._do_update()
+            self.do_update()
         elif not isinstance(self.current_item, Group):
             self.current_item.value = value
     
     @property
     def data(self) -> dict:
         data = {}
-        for i in self._items:
-            data[i.title] = i.data
-        return data
+        for item in self._items:
+            if isinstance(item, WaveformList):
+                value = item.value
+            else:
+                value = item.data
+            if value is not None:
+                data[item.title] = value
+        return data if data else None
     
     @data.setter
-    def data(self, value:dict):
+    def data(self, value:dict) -> None:
         for title in value:
-            item = self.find(title)
+            i, item = self.find(title)
             if item:
                 item.data = value[title]
+
+    def do_update(self) -> None:
+        for item in self._items:
+            item.do_update()
 
     @property
     def index(self) -> int:
@@ -200,19 +214,14 @@ class Group(Item):
             return True
         else:
             return self.current_item.reset()
+    
+    def __len__(self) -> int:
+        return len(self._items)
+    
+    def __getitem__(self, index:int) -> Item:
+        return self._items[index % len(self._items)]
 
-class Menu(Group):
-
-    def __init__(self, title:str|Callable[[Item], str], items:tuple[Item] = None, loop:bool = False):
-        super().__init__(title, items, loop)
-        self._stack = [self]
-        self.draw(self.selected)
-
-    @property
-    def selected(self) -> Item:
-        return self._stack[-1]
-
-    def write_file(self, path:str) -> bool:
+    def write(self, path:str) -> bool:
         if not path.endswith(".json"):
             raise ValueError("File path must have a .json extension.")
         
@@ -224,10 +233,10 @@ class Menu(Group):
             with open(path, "w") as file:
                 json.dump(data, file)
             return True
-        except:
+        except OSError as e:
             return False
         
-    def read_file(self, path:str) -> bool:
+    def read(self, path:str) -> bool:
         if not path.endswith(".json"):
             raise ValueError("File path must have a .json extension.")
         
@@ -239,7 +248,7 @@ class Menu(Group):
         try:
             with open(path, "r") as file:
                 data = json.load(file)
-        except:
+        except (OSError, ValueError) as e:
             return False
         
         if not data or not type(data) is dict:
@@ -247,6 +256,17 @@ class Menu(Group):
         
         self.data = data
         return True
+
+class Menu(Group):
+
+    def __init__(self, title:str|Callable[[Item], str], items:tuple[Item] = None, loop:bool = False):
+        super().__init__(title, items, loop)
+        self._stack = [self]
+        self.draw()
+
+    @property
+    def selected(self) -> Item:
+        return self._stack[-1]
     
     def select(self, index:int = -1) -> bool:
         if not isinstance(self.selected, Group):
@@ -260,7 +280,7 @@ class Menu(Group):
             return False
         elif result is not None:
             self._stack.append(self.selected.items[index])
-        self.draw(self.selected)
+        self.draw()
         return True
 
     def navigate(self, value:int) -> bool:
@@ -274,14 +294,14 @@ class Menu(Group):
             if result:
                 self._stack.pop()
                 self._stack.append(self.selected.current_item)
-        if result: self.draw(self.selected)
+        if result: self.draw()
         return result
     
     def exit(self) -> bool:
         if len(self._stack) == 1:
             return False
         self._stack.pop()
-        self.draw(self.selected)
+        self.draw()
         return True
     
     @property
@@ -297,13 +317,14 @@ class Menu(Group):
             prev_value = item.value
             item.value = value
             if item.value != prev_value:
-                self.draw(self.selected)
+                self.draw()
     
     def increment(self) -> bool:
         if self.selected is not self:
             result = self.selected.increment()
         else:
             result = super().increment()
+        if result: self.draw()
         return result
     
     def decrement(self) -> bool:
@@ -311,14 +332,15 @@ class Menu(Group):
             result = self.selected.decrement()
         else:
             result = super().decrement()
+        if result: self.draw()
         return result
     
     def reset(self, full:bool = False) -> bool:
         result = super().reset(full)
-        if result: self.draw(self.selected)
+        if result: self.draw()
         return result
     
-    def draw(self, item:Item) -> None:
+    def draw(self) -> None:
         pass
     
 class Action(Item):
@@ -350,8 +372,9 @@ class Number(Item):
         decimals:int = 1,
         prepend:str = "",
         append:str = "",
+        on_update:Callable[[float|int, Item], None] = None,
     ):
-        super().__init__(title)
+        super().__init__(title, on_update)
         self._step = step
         self._default = default
         self._value = default
@@ -399,7 +422,7 @@ class Number(Item):
             value = min(max(value, _min), _max)
         if self._value != value:
             self._value = value
-            self._do_update()
+            self.do_update()
 
     @property
     def relative_value(self) -> float:
@@ -408,6 +431,10 @@ class Number(Item):
     @property
     def data(self) -> float|int:
         return self._value
+    
+    @data.setter
+    def data(self, value:float|int) -> None:
+        self._value = value
     
     @property
     def label(self) -> str:
@@ -454,6 +481,7 @@ class Bool(Number):
         default:bool = False,
         loop:bool = False,
         labels:tuple[str, str] = ("Off", "On"),
+        on_update:Callable[[bool, Item], None] = None,
     ):
         super().__init__(
             title=title,
@@ -462,6 +490,7 @@ class Bool(Number):
             minimum=0,
             maximum=1,
             loop=loop,
+            on_update=on_update,
         )
         self._labels = labels
 
@@ -476,7 +505,7 @@ class Bool(Number):
         value = int(value)
         if self._value != value:
             self._value = value
-            self._do_update()
+            self.do_update()
 
     @property
     def label(self) -> str:
@@ -489,15 +518,21 @@ class Percentage(Number):
         title:str|Callable[[Item], str],
         step:float=0.01,
         default:float=0.0,
+        minimum:float|int = 0.0,
+        maximum:float|int = 1.0,
+        show_sign:bool = False,
         loop:bool=False,
+        on_update:Callable[[float, Item], None] = None,
     ):
         super().__init__(
             title,
             step=step,
             default=default,
-            minimum=0.0,
-            maximum=1.0,
+            minimum=minimum,
+            maximum=maximum,
+            show_sign=show_sign,
             loop=loop,
+            on_update=on_update,
         )
     
     @property
@@ -515,6 +550,7 @@ class Time(Number):
         maximum:float=4.0,
         smoothing:float=3.0,
         decimals:int=3,
+        on_update:Callable[[float, Item], None] = None,
     ):
         super().__init__(
             title,
@@ -526,6 +562,7 @@ class Time(Number):
             loop=False,
             decimals=decimals,
             append="s",
+            on_update=on_update,
         )
     
 class List(Number):
@@ -536,6 +573,7 @@ class List(Number):
         items:tuple[str],
         default:int = 0,
         loop:bool = True,
+        on_update:Callable[[int, Item], None] = None,
     ):
         super().__init__(
             title,
@@ -544,6 +582,7 @@ class List(Number):
             minimum = 0,
             maximum = len(items) - 1,
             loop=loop,
+            on_update=on_update,
         )
         self._items = items
 
@@ -553,7 +592,7 @@ class List(Number):
 
 class Char(Number):
 
-    def __init__(self, title:str|Callable[[Item], str]):
+    def __init__(self, title:str|Callable[[Item], str], on_update:Callable[[str, Item], None] = None):
         super().__init__(
             title,
             step=1,
@@ -561,6 +600,7 @@ class Char(Number):
             minimum=0,
             maximum=len(_CHARACTERS)-1,
             loop=True,
+            on_update=on_update,
         )
     
     @property
@@ -578,7 +618,7 @@ class Char(Number):
             if value < 0:
                 return
         self._value = value % len(_CHARACTERS)
-        self._do_update()
+        self.do_update()
 
     @property
     def label(self) -> str:
@@ -586,15 +626,16 @@ class Char(Number):
 
 class String(Group):
 
-    def __init__(self, title:str|Callable[[Item], str], length:int=16):
+    def __init__(self, title:str|Callable[[Item], str], length:int=16, on_update:Callable[[str, Item], None] = None):
         self._length = length
         super().__init__(
             title,
             tuple([Char(str(i+1)) for i in range(length)]),
         )
+        self.on_update = on_update
     
     @property
-    def value(self) -> tuple:
+    def value(self) -> str:
         return "".join([i.label for i in self._items])
     
     @value.setter
@@ -602,7 +643,7 @@ class String(Group):
         if type(value) is str:
             for i in range(min(len(value), self._length)):
                 self._items[i].value = value[i]
-            self._do_update()
+            self.do_update()
     
     @property
     def data(self) -> str:
@@ -622,8 +663,9 @@ class WaveformList(List):
         self,
         title:str|Callable[[Item], str],
         items:tuple[str, Callable[[], np.ndarray]],
+        on_update:Callable[[int, Item], None] = None,
     ):
-        super().__init__(title, items)
+        super().__init__(title, items, on_update=on_update)
 
     @property
     def label(self) -> str:
@@ -632,6 +674,10 @@ class WaveformList(List):
     @property
     def data(self) -> np.ndarray:
         return self._items[self.value][1]()
+    
+    @data.setter
+    def data(self, value:int) -> None:
+        self._value = value
 
 
 class Waveform(Group):
@@ -644,30 +690,43 @@ class Waveform(Group):
         self,
         title:str|Callable[[Item], str],
         items:tuple[str, Callable[[], np.ndarray]],
+        on_waveform_update:Callable[[int, Item], None] = None,
+        on_loop_start_update:Callable[[float, Item], None] = None,
+        on_loop_end_update:Callable[[float, Item], None] = None,
     ):
         self.waveform = WaveformList(
-            "Waveform",
+            "Type",
             items,
+            on_update=on_waveform_update,
         )
+
         self.loop_start = Percentage(
             "Loop Start",
             default=0.0,
         )
         self.loop_start.on_update = self._update_loop_start
+        self._on_loop_start_update = on_loop_start_update
+
         self.loop_end = Percentage(
             "Loop End",
             default=1.0,
         )
         self.loop_end.on_update = self._update_loop_end
+        self._on_loop_end_update = on_loop_end_update
+
         super().__init__(title, (self.waveform, self.loop_start, self.loop_end))
 
     def _update_loop_start(self, value:float, item:Item) -> None:
         if value > self.loop_end.value:
             self.loop_end.value = value
+        if callable(self._on_loop_start_update):
+            self._on_loop_start_update(value, item)
 
     def _update_loop_end(self, value:float, item:Item) -> None:
         if value < self.loop_start.value:
             self.loop_start.value = value
+        if callable(self._on_loop_end_update):
+            self._on_loop_end_update(value, item)
 
 
 class AREnvelope(Group):
@@ -676,11 +735,28 @@ class AREnvelope(Group):
     sustain_level:Number = None
     release_time:Time = None
 
-    def __init__(self, title:str|Callable[[Item], str]):
-        self.attack_time = Time("Attack Time")
-        self.sustain_level = Number("Sustain Level", step=0.05)
-        self.release_time = Time("Release Time")
+    def __init__(
+        self,
+        title:str|Callable[[Item], str],
+        on_attack_time_update:Callable[[float, Item], None] = None,
+        on_sustain_level_update:Callable[[float, Item], None] = None,
+        on_release_time_update:Callable[[float, Item], None] = None,
+    ):
+        self.attack_time = Time(
+            title="Attack Time",
+            on_update=on_attack_time_update,
+        )
+        self.sustain_level = Percentage(
+            title="Sustain Level",
+            step=0.05,
+            on_update=on_sustain_level_update,
+        )
+        self.release_time = Time(
+            title="Release Time",
+            on_update=on_release_time_update,
+        )
         super().__init__(title, (self.attack_time, self.sustain_level, self.release_time))
+
 
 class ADSREnvelope(Group):
 
@@ -690,12 +766,20 @@ class ADSREnvelope(Group):
     sustain_level:Number = None
     release_time:Time = None
 
-    def __init__(self, title:str|Callable[[Item], str]):
-        self.attack_time = Time("Attack Time")
-        self.attack_level = Number("Attack Level", default=1.0, step=0.05)
-        self.decay_time = Time("Decay Time")
-        self.sustain_level = Number("Sustain Level", default=0.75, step=0.05)
-        self.release_time = Time("Release Time")
+    def __init__(
+        self,
+        title:str|Callable[[Item], str],
+        on_attack_time_update:Callable[[float, Item], None] = None,
+        on_attack_level_update:Callable[[float, Item], None] = None,
+        on_decay_time_update:Callable[[float, Item], None] = None,
+        on_sustain_level_update:Callable[[float, Item], None] = None,
+        on_release_time_update:Callable[[float, Item], None] = None,
+    ):
+        self.attack_time = Time("Attack Time", on_update=on_attack_time_update)
+        self.attack_level = Percentage("Attack Level", default=1.0, step=0.05, on_update=on_attack_level_update)
+        self.decay_time = Time("Decay Time", on_update=on_decay_time_update)
+        self.sustain_level = Percentage("Sustain Level", default=0.75, step=0.05, on_update=on_sustain_level_update)
+        self.release_time = Time("Release Time", on_update=on_release_time_update)
         super().__init__(title, (
             self.attack_time,
             self.attack_level,
@@ -709,20 +793,37 @@ class LFO(Group):
     depth:Number = None
     rate:Number = None
 
-    def __init__(self, title:str|Callable[[Item], str]):
+    def __init__(
+        self,
+        title:str|Callable[[Item], str],
+        on_depth_update:Callable[[float, Item], None] = None,
+        on_rate_update:Callable[[float, Item], None] = None,
+        on_delay_update:Callable[[float, Item], None] = None,
+    ):
         self.depth = Number(
-            "Depth",
+            title="Depth",
             step=0.01,
             maximum=0.5,
             smoothing=2.0,
+            decimals=3,
+            on_update=on_depth_update,
         )
         self.rate = Number(
-            "Rate",
+            title="Rate",
             step=0.01,
             maximum=32.0,
             smoothing=2.0,
+            append="hz",
+            on_update=on_rate_update,
         )
-        super().__init__(title, (self.depth, self.rate))
+        self.delay = Time(
+            "Delay",
+            step=0.05,
+            minimum=0.0,
+            maximum=2.0,
+            on_update=on_delay_update,
+        )
+        super().__init__(title, (self.depth, self.rate, self.delay))
 
 class Filter(Group):
 
@@ -730,19 +831,42 @@ class Filter(Group):
     frequency:Number = None
     resonance:Number = None
 
-    def __init__(self, title:str|Callable[[Item], str]):
+    def __init__(
+        self,
+        title:str|Callable[[Item], str],
+        min_frequency:float = 0.0,
+        max_frequency:float = 20000.0,
+        min_resonance:float = 0.7071067811865475,
+        max_resonance:float = 2.0,
+        on_type_update:Callable[[int, Item], None] = None,
+        on_frequency_update:Callable[[float, Item], None] = None,
+        on_resonance_update:Callable[[float, Item], None] = None,
+    ):
         self.type = List(
-            "Type",
-            ("Low Pass", "High Pass", "Band Pass"),
+            title="Type",
+            items=("Low Pass", "High Pass", "Band Pass"),
+            on_update=on_type_update,
         )
         self.frequency = Number(
-            "Frequency",
+            title="Frequency",
             default=1.0,
             step=0.01,
+            minimum=min_frequency,
+            maximum=max_frequency,
             smoothing=3.0,
+            decimals=0,
+            append="hz",
+            on_update=on_frequency_update,
         )
         self.resonance = Number(
-            "Resonance",
+            title="Resonance",
+            default=0.0,
+            step=0.01,
+            minimum=min_resonance,
+            maximum=max_resonance,
+            smoothing=2.0,
+            decimals=3,
+            on_update=on_resonance_update,
         )
         super().__init__(title, (
             self.type,
@@ -755,16 +879,23 @@ class Mix(Group):
     level:Number = None
     pan:Number = None
 
-    def __init__(self, title:str|Callable[[Item], str]):
-        self.level = Number(
+    def __init__(
+        self,
+        title:str|Callable[[Item], str],
+        on_level_update:Callable[[float, Item], None] = None,
+        on_pan_update:Callable[[float, Item], None] = None,
+    ):
+        self.level = Percentage(
             "Level",
             default=1.0,
             step=0.025,
+            on_update=on_level_update,
         )
         self.pan = Number(
             "Pan",
             step=0.1,
             minimum=-1.0,
+            on_update=on_pan_update,
         )
         super().__init__(title, (
             self.level,
@@ -777,43 +908,93 @@ class Tune(Group):
     fine:Number = None
     glide:Time = None
     bend:Number = None
+    slew:Number = None
+    slew_time:Time = None
 
-    def __init__(self, title:str|Callable[[Item], str]):
+    def __init__(
+        self,
+        title:str|Callable[[Item], str],
+        on_coarse_update:Callable[[float, Item], None] = None,
+        on_fine_update:Callable[[float, Item], None] = None,
+        on_glide_update:Callable[[float, Item], None] = None,
+        on_bend_update:Callable[[float, Item], None] = None,
+        on_slew_update:Callable[[float, Item], None] = None,
+        on_slew_time_update:Callable[[float, Item], None] = None,
+    ):
         self.coarse = Number(
             "Coarse",
+            default=0,
             step=1,
             minimum=-36,
             maximum=36,
             show_sign=True,
             decimals=0,
         )
+        if callable(on_coarse_update):
+            self.coarse.on_update = lambda value, item: on_coarse_update(value / 12, item)
+
         self.fine = Number(
             "Fine",
-            step=1/12/12,
-            minimum=-1/12,
-            maximum=1/12,
+            default=0,
+            step=5,
+            minimum=-100,
+            maximum=100,
             show_sign=True,
             decimals=3,
+            append=" cents",
+            on_update=on_fine_update,
         )
+        if callable(on_fine_update):
+            self.fine.on_update = lambda value, item: on_fine_update(value / 100, item)
+
         self.glide = Time(
             "Glide",
             step=0.05,
             minimum=0.0,
             maximum=2.0,
+            on_update=on_glide_update,
         )
+
         self.bend = Number(
             "Bend",
-            step=1/24,
-            minimum=-2.0,
-            maximum=2.0,
+            default=0,
+            step=1,
+            minimum=-24,
+            maximum=24,
             show_sign=True,
-            decimals=2,
+            decimals=0,
         )
+        if callable(on_bend_update):
+            self.bend.on_update = lambda value, item: on_bend_update(value / 12, item)
+
+        self.slew = Number(
+            "Slew",
+            default=0,
+            step=10,
+            minimum=-2400,
+            maximum=2400,
+            show_sign=True,
+            decimals=0,
+            append=" cents",
+        )
+        if callable(on_slew_update):
+            self.slew.on_update = lambda value, item: on_slew_update(value / 1200, item)
+
+        self.slew_time = Time(
+            "Slew Time",
+            step=0.05,
+            minimum=0.0,
+            maximum=2.0,
+            on_update=on_slew_time_update,
+        )
+
         super().__init__(title, (
             self.coarse,
             self.fine,
             self.glide,
             self.bend,
+            self.slew,
+            self.slew_time,
         ))
 
 class Patch(Group):
@@ -821,16 +1002,83 @@ class Patch(Group):
     patch:Number = None
     name:String = None
 
-    def __init__(self, title:str|Callable[[Item], str], count:int=16):
+    def __init__(
+        self,
+        title:str|Callable[[Item], str],
+        count:int=16,
+        on_patch_update:Callable[[int, Item], None] = None,
+        on_name_update:Callable[[str, Item], None] = None,
+    ):
         self.patch = Number(
-            "Patch",
+            title="Patch",
             step=1,
             default=0,
             maximum=count-1,
             loop=True,
             decimals=0,
+            on_update=on_patch_update,
         )
         self.name = String(
-            "Name",
+            title="Name",
+            on_update=on_name_update,
         )
         super().__init__(title, (self.patch, self.name))
+
+class Sequence(Group):
+
+    def __init__(
+        self,
+        title:str|Callable[[Item], str],
+        length:int=16,
+        on_update:Callable[[tuple, Item], None] = None,
+    ):
+        self._length = length
+        super().__init__(
+            title,
+            tuple([Bool(
+                title=str(i+1),
+                labels=(" ", "*"),
+                on_update=self._handle_update,
+            ) for i in range(length)]),
+        )
+        self.on_update = on_update
+
+    def _handle_update(self, value = None, item = None) -> None:
+        if callable(self.on_update): self.on_update(self.value, self)
+
+    def do_update(self) -> None:
+        self._handle_update()
+    
+    @property
+    def value(self) -> tuple:
+        return tuple([i.value for i in self._items])
+    
+    @value.setter
+    def value(self, value:tuple) -> None:
+        if type(value) is tuple:
+            for i in range(min(len(value), self._length)):
+                self._items[i].value = bool(value[i])
+            self.do_update()
+    
+    @property
+    def label(self) -> str:
+        return "".join([i.label for i in self._items])
+    
+    @property
+    def length(self) -> int:
+        return self._length
+    
+    @length.setter
+    def length(self, value: int) -> None:
+        self._length = max(value, 1)
+        if len(self._items) > self._length:
+            self._items = self._items[:self._length]
+        elif len(self._items) < self._length:
+            for i in range(len(self._items), self._length):
+                self._items.append(Bool(
+                    title=str(i+1),
+                    labels=(" ", "*"),
+                    on_update=self._handle_update,
+                ))
+        self._index = self._index % self._length
+        

@@ -186,7 +186,8 @@ class Menu(synthmenu.Menu):
     def group(self) -> displayio.Group:
         return self._buffer
     
-    def draw(self, item:synthmenu.Item) -> None:
+    def draw(self) -> None:
+        item = self.selected
 
         is_string = isinstance(item, synthmenu.String)
         is_waveform = isinstance(item, synthmenu.WaveformList) or isinstance(item, synthmenu.Waveform)
