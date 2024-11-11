@@ -92,7 +92,7 @@ Usage Example
 =============
 
 .. code-block:: python
-    
+
     import synthmenu
     menu = synthmenu.Menu("Menu", (
         synthmenu.Action("Action 1", lambda: print("Hello World!")),

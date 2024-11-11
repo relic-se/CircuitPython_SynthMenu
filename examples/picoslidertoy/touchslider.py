@@ -7,7 +7,7 @@
 ================================================================================
 
 Create linear (TouchSlider) and rotary (TouchWheel) capacative touch sliders
- using three `touchio` pins and special pad geometry. 
+ using three `touchio` pins and special pad geometry.
 
 Originally part of the 'touchwheels' project: https://github.com/todbot/touchwheels/
 2023 - @todbot / Tod Kurt
@@ -20,17 +20,27 @@ Originally part of the 'touchwheels' project: https://github.com/todbot/touchwhe
 """
 
 import time
+
 import touchio
 
 try:
     from typing import Callable
+
     from microcontroller import Pin
 except ImportError:
     pass
 
-class TouchWheel():
-    """Simple capacitive touchweel made from three captouch pads """
-    def __init__(self, pins:tuple[Pin], offset:float|None=None, sector_scale:float|None=None, wrap_value:bool=True):
+
+class TouchWheel:
+    """Simple capacitive touchweel made from three captouch pads"""
+
+    def __init__(
+        self,
+        pins: tuple[Pin],
+        offset: float | None = None,
+        sector_scale: float | None = None,
+        wrap_value: bool = True,
+    ):
         if len(pins) < 3:
             raise ValueError("Touch wheel must have at least 3 touch pads to function")
 
@@ -43,7 +53,7 @@ class TouchWheel():
             self._touchins.append(touchio.TouchIn(pin))
 
     @property
-    def pos(self) -> float|None:
+    def pos(self) -> float | None:
         """
         Given three touchio.TouchIn pads, compute wheel position 0-1
         or return None if wheel is not pressed
@@ -78,13 +88,17 @@ class TouchWheel():
         # wrap pos around the 0-1 circle if offset puts it outside that range
         return (pos + self._offset) % 1 if pos is not None else None
 
+
 class TouchSlider(TouchWheel):
-    """A TouchSlider is a linearized TouchWheel """
+    """A TouchSlider is a linearized TouchWheel"""
+
     def __init__(self, touch_pins, offset=0, sector_scale=0.5, wrap_value=False):
         super().__init__(touch_pins, offset, sector_scale, wrap_value)
 
+
 class TouchWheelRotary(TouchWheel):
-    """A TouchWheelRotary is a standard TouchWheel but with an incremental value and button inputs """
+    """A TouchWheelRotary is a standard TouchWheel but with an incremental value and button inputs.
+    """
 
     on_left_press: Callable[[], None] = None
     on_right_press: Callable[[], None] = None
@@ -100,7 +114,15 @@ class TouchWheelRotary(TouchWheel):
     on_decrement: Callable[[], None] = None
     on_step_release: Callable[[int], None] = None
 
-    def __init__(self, touch_pins, step_size=0.2, short_press_duration=0.05, long_press_duration=0.2, offset = -0.333/2, sector_scale=0.333):
+    def __init__(
+        self,
+        touch_pins,
+        step_size=0.2,
+        short_press_duration=0.05,
+        long_press_duration=0.2,
+        offset=-0.333 / 2,
+        sector_scale=0.333,
+    ):
         super().__init__(touch_pins, offset, sector_scale)
         self._step_size = min(max(step_size, 0.01), 0.25)
         self._short_press_duration = max(short_press_duration, 0.01)
@@ -116,9 +138,9 @@ class TouchWheelRotary(TouchWheel):
         # No touch
         if value is None and self._value is None:
             return
-        
+
         current_time = time.monotonic()
-        
+
         # Start of touch
         if self._value is None:
             self._value = value
@@ -148,17 +170,16 @@ class TouchWheelRotary(TouchWheel):
                         self.on_right_long_press()
                     elif not long_press and not long_press and callable(self.on_right_press):
                         self.on_right_press()
-                else:
-                    if long_press and callable(self.on_up_long_press):
-                        self.on_up_long_press()
-                    elif not long_press and callable(self.on_up_press):
-                        self.on_up_press()
+                elif long_press and callable(self.on_up_long_press):
+                    self.on_up_long_press()
+                elif not long_press and callable(self.on_up_press):
+                    self.on_up_press()
             elif self._stepped:
                 if callable(self.on_step_release):
                     self.on_step_release(self._steps)
             self._value = None
             return
-        
+
         # Fix wrapping
         unwrapped_value = value
         if abs(value - self._value) > 0.5:
